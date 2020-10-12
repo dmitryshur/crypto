@@ -44,6 +44,17 @@ impl From<reqwest::Error> for Errors {
     }
 }
 
+pub struct Credentials {
+    api_key: String,
+    secret: String,
+}
+
+impl Credentials {
+    pub fn new(api_key: String, secret: String) -> Self {
+        Self { api_key, secret }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct KrakenResponse {
     error: Vec<String>,
@@ -63,7 +74,7 @@ enum Responses {
 struct AssetsResponse(HashMap<String, Asset>);
 
 #[derive(Debug, Deserialize)]
-struct Asset {
+pub struct Asset {
     aclass: String,
     altname: String,
     decimals: u8,
@@ -80,38 +91,34 @@ struct TickerResponse {}
 struct OrderBookResponse {}
 
 pub struct Kraken {
-    api_key: String,
-    secret: String,
+    credentials: Credentials,
     client: Client,
 }
 
 // TODO implement methods for the following requests:
-//  * Assets
 //  * AssetPairs
 //  * Ticker
 //  * Depth (order book)
 impl Kraken {
-    pub fn new(api_key: &str, secret: &str) -> Self {
+    pub fn new(credentials: Credentials) -> Self {
         let client = Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
             .expect("Can't create reqwest client");
 
-        Self {
-            api_key: api_key.to_string(),
-            secret: secret.to_string(),
-            client,
-        }
+        Self { credentials, client }
     }
 
-    pub async fn assets(&self) -> Result<HashMap<String, Asset>, Errors> {
-        let response = self
-            .client
-            .get(ASSETS_URL)
-            .send()
-            .await?
-            .json::<KrakenResponse>()
-            .await?;
+    pub async fn assets(&self, params: Option<HashMap<&str, &str>>) -> Result<HashMap<String, Asset>, Errors> {
+        let mut request = self.client.get(ASSETS_URL);
+
+        // Add additional request params if present
+        if let Some(params) = params {
+            let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
+            request = request.query(&query_params);
+        }
+
+        let response = request.send().await?.json::<KrakenResponse>().await?;
 
         // TODO this is wrong. test with a request which returns a definite error, like when forgetting
         //  to specify a pair in Ticker
@@ -119,24 +126,5 @@ impl Kraken {
             Responses::Assets(response) => Ok(response.0),
             _ => Err(Errors::InvalidFormat),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // TODO maybe create a config struct
-    //  mock somehow
-    #[tokio::test]
-    async fn assets() {
-        let api_key = "YHtLCbf8IEbiLyiLE6iD//i99jsL4mi1+9Nh9vWBsp+KAx/GpdWi/+Yt";
-        let secret = "fB9sLSGJrPjAwtxrId/mhEmg7iZSPzyNYvnVbMYOGWreS6k17JuFoKF94xG2BB25rsM1hy5v6Eja5S+A4E7ckA==";
-
-        let kraken = Kraken::new(api_key, secret);
-        let response = kraken.assets().await;
-        println!("{:?}", response);
-
-        assert_eq!(1, 2);
     }
 }
