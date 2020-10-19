@@ -65,7 +65,7 @@ enum Responses {
     Assets(HashMap<String, Asset>),
     AssetPairs(AssetPairs),
     Ticker(HashMap<String, Ticker>),
-    OrderBook(OrderBookResponse),
+    OrderBook(HashMap<String, OrderBook>),
 }
 
 #[derive(Debug, Deserialize)]
@@ -82,29 +82,6 @@ pub enum AssetPairs {
     Info(HashMap<String, AssetPairInfo>),
     Fees(HashMap<String, AssetPairFees>),
     Margin(HashMap<String, AssetPairMargin>),
-}
-
-// TODO might me a good idea to use tuples instead of simple vecs
-#[derive(Debug, Deserialize)]
-pub struct Ticker {
-    // Ask array (<price>, <whole lot volume>, <lot volume>)
-    a: Vec<String>,
-    // Bid array (<price>, <whole lot volume>, <lot volume>)
-    b: Vec<String>,
-    // Last trade closed array (<price>, <lot volume>)
-    c: Vec<String>,
-    // Volume array (<today>, <last 24 hours>)
-    v: Vec<String>,
-    // Volume weighted average price array (<today>, <last 24 hours>)
-    p: Vec<String>,
-    // Number of trades array (<today>, <last 24 hours>)
-    t: Vec<u64>,
-    // Low array(<today>, <last 24 hours>)
-    l: Vec<String>,
-    // High array(<today>, <last 24 hours>)
-    h: Vec<String>,
-    // Today's opening price
-    o: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -142,15 +119,38 @@ pub struct AssetPairMargin {
 }
 
 #[derive(Debug, Deserialize)]
-struct OrderBookResponse {}
+pub struct Ticker {
+    // Ask array (<price>, <whole lot volume>, <lot volume>)
+    a: Vec<String>,
+    // Bid array (<price>, <whole lot volume>, <lot volume>)
+    b: Vec<String>,
+    // Last trade closed array (<price>, <lot volume>)
+    c: Vec<String>,
+    // Volume array (<today>, <last 24 hours>)
+    v: Vec<String>,
+    // Volume weighted average price array (<today>, <last 24 hours>)
+    p: Vec<String>,
+    // Number of trades array (<today>, <last 24 hours>)
+    t: Vec<u64>,
+    // Low array(<today>, <last 24 hours>)
+    l: Vec<String>,
+    // High array(<today>, <last 24 hours>)
+    h: Vec<String>,
+    // Today's opening price
+    o: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OrderBook {
+    pub asks: Vec<(String, String, u64)>,
+    pub bids: Vec<(String, String, u64)>,
+}
 
 pub struct Kraken {
     credentials: Credentials,
     client: Client,
 }
 
-// TODO implement methods for the following requests:
-//  * Depth (order book)
 impl Kraken {
     pub fn new(credentials: Credentials) -> Self {
         let client = Client::builder()
@@ -214,6 +214,22 @@ impl Kraken {
 
         match response.result.unwrap() {
             Responses::Ticker(response) => Ok(response),
+            _ => Err(Errors::InvalidFormat),
+        }
+    }
+
+    pub async fn order_book(&self, params: HashMap<&str, &str>) -> Result<HashMap<String, OrderBook>, Errors> {
+        let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
+        let request = self.client.get(ORDER_BOOK_URL).query(&query_params);
+
+        let response = request.send().await?.json::<KrakenResponse>().await?;
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
+
+        match response.result.unwrap() {
+            Responses::OrderBook(response) => Ok(response),
             _ => Err(Errors::InvalidFormat),
         }
     }

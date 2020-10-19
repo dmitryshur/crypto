@@ -92,3 +92,38 @@ async fn ticker_api() {
     assert_eq!(response.contains_key("XXRPZUSD"), true);
     assert_eq!(response.contains_key("ADAETH"), true);
 }
+
+#[tokio::test]
+async fn order_book_api() {
+    let kraken = Kraken::new(common::create_credentials());
+    let mut params = HashMap::new();
+    params.insert("pair", "XXRPZUSD");
+
+    let response = kraken.order_book(params).await;
+    assert_eq!(response.is_ok(), true);
+
+    let response = response.unwrap();
+
+    assert_eq!(response.len() == 1, true);
+    assert_eq!(response.contains_key("XXRPZUSD"), true);
+
+    let order_book = response.get("XXRPZUSD").unwrap();
+    assert_eq!(order_book.asks.len() > 0, true);
+    assert_eq!(order_book.bids.len() > 0, true);
+
+    let mut params = HashMap::new();
+    params.insert("pair", "XXRPZUSD");
+    params.insert("count", "2");
+
+    let response = kraken.order_book(params).await;
+    assert_eq!(response.is_ok(), true);
+
+    let response = response.unwrap();
+
+    assert_eq!(response.len() == 1, true);
+    assert_eq!(response.contains_key("XXRPZUSD"), true);
+
+    let order_book = response.get("XXRPZUSD").unwrap();
+    assert_eq!(order_book.asks.len() == 2, true);
+    assert_eq!(order_book.bids.len() == 2, true);
+}
