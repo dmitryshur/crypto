@@ -13,11 +13,7 @@ async fn assets_api() {
     // Should return all the assets
     let response = kraken.assets(None).await;
     assert_eq!(response.is_ok(), true);
-    assert_eq!(
-        response.unwrap().len() > 0,
-        true,
-        "Testing if there are any assets present in the assets response"
-    );
+    assert_eq!(response.unwrap().len() > 0, true,);
 
     let mut params = HashMap::new();
     params.insert("asset", "algo,ada");
@@ -28,21 +24,9 @@ async fn assets_api() {
     assert_eq!(response.is_ok(), true);
     let response = response.unwrap();
 
-    assert_eq!(
-        response.len(),
-        2,
-        "Testing if the amount of assets in the response is equal to the amount of assets in the request params"
-    );
-    assert_eq!(
-        response.contains_key("ALGO"),
-        true,
-        "Testing if ALGO asset is present in assets response"
-    );
-    assert_eq!(
-        response.contains_key("ADA"),
-        true,
-        "Testing if ADA asset is present in assets response"
-    );
+    assert_eq!(response.len(), 2,);
+    assert_eq!(response.contains_key("ALGO"), true,);
+    assert_eq!(response.contains_key("ADA"), true,);
 }
 
 #[tokio::test]
@@ -54,11 +38,7 @@ async fn asset_pairs_api() {
 
     match response.unwrap() {
         AssetPairs::Info(pairs) => {
-            assert_eq!(
-                pairs.len() > 0,
-                true,
-                "Testing if there are any asset pairs present in the asset pairs response"
-            );
+            assert_eq!(pairs.len() > 0, true,);
         }
         _ => {
             panic!("Invalid response from asset_pairs_api with no params");
@@ -74,11 +54,7 @@ async fn asset_pairs_api() {
 
     match response.unwrap() {
         AssetPairs::Fees(pairs) => {
-            assert_eq!(
-                pairs.len() == 1,
-                true,
-                "Testing if the number of pairs is 1 in request for fees"
-            );
+            assert_eq!(pairs.len() == 1, true,);
         }
         _ => {
             panic!("Invalid response from asset_pairs_api with pair and fees params");
@@ -94,14 +70,25 @@ async fn asset_pairs_api() {
 
     match response.unwrap() {
         AssetPairs::Margin(pairs) => {
-            assert_eq!(
-                pairs.len() == 2,
-                true,
-                "Testing if the number of pairs is 2 in request for margin"
-            );
+            assert_eq!(pairs.len() == 2, true,);
         }
         _ => {
             panic!("Invalid response from asset_pairs_api with pair and margin params");
         }
     }
+}
+#[tokio::test]
+async fn ticker_api() {
+    let kraken = Kraken::new(common::create_credentials());
+    let mut params = HashMap::new();
+    params.insert("pair", "XXRPZUSD,ADAETH");
+
+    let response = kraken.ticker(params).await;
+    assert_eq!(response.is_ok(), true);
+
+    let response = response.unwrap();
+
+    assert_eq!(response.len() == 2, true);
+    assert_eq!(response.contains_key("XXRPZUSD"), true);
+    assert_eq!(response.contains_key("ADAETH"), true);
 }

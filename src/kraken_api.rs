@@ -12,6 +12,7 @@ const ORDER_BOOK_URL: &'static str = "https://api.kraken.com/0/public/Depth";
 #[derive(Debug)]
 pub enum Errors {
     Request(reqwest::Error),
+    Kraken(String),
     InvalidFormat,
 }
 
@@ -20,6 +21,7 @@ impl fmt::Display for Errors {
         match self {
             Self::Request(error) => write!(f, "{}", error),
             Self::InvalidFormat => write!(f, "Invalid format"),
+            Self::Kraken(error) => write!(f, "{}", error),
         }
     }
 }
@@ -29,6 +31,7 @@ impl error::Error for Errors {
         match self {
             Self::Request(error) => error.source(),
             Self::InvalidFormat => None,
+            Self::Kraken(_) => None,
         }
     }
 }
@@ -61,7 +64,7 @@ struct KrakenResponse {
 enum Responses {
     Assets(HashMap<String, Asset>),
     AssetPairs(AssetPairs),
-    Ticker(TickerResponse),
+    Ticker(HashMap<String, Ticker>),
     OrderBook(OrderBookResponse),
 }
 
@@ -79,6 +82,29 @@ pub enum AssetPairs {
     Info(HashMap<String, AssetPairInfo>),
     Fees(HashMap<String, AssetPairFees>),
     Margin(HashMap<String, AssetPairMargin>),
+}
+
+// TODO might me a good idea to use tuples instead of simple vecs
+#[derive(Debug, Deserialize)]
+pub struct Ticker {
+    // Ask array (<price>, <whole lot volume>, <lot volume>)
+    a: Vec<String>,
+    // Bid array (<price>, <whole lot volume>, <lot volume>)
+    b: Vec<String>,
+    // Last trade closed array (<price>, <lot volume>)
+    c: Vec<String>,
+    // Volume array (<today>, <last 24 hours>)
+    v: Vec<String>,
+    // Volume weighted average price array (<today>, <last 24 hours>)
+    p: Vec<String>,
+    // Number of trades array (<today>, <last 24 hours>)
+    t: Vec<u64>,
+    // Low array(<today>, <last 24 hours>)
+    l: Vec<String>,
+    // High array(<today>, <last 24 hours>)
+    h: Vec<String>,
+    // Today's opening price
+    o: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -116,9 +142,6 @@ pub struct AssetPairMargin {
 }
 
 #[derive(Debug, Deserialize)]
-struct TickerResponse {}
-
-#[derive(Debug, Deserialize)]
 struct OrderBookResponse {}
 
 pub struct Kraken {
@@ -127,9 +150,6 @@ pub struct Kraken {
 }
 
 // TODO implement methods for the following requests:
-//  * AssetPairs
-//  fix warnings
-//  * Ticker
 //  * Depth (order book)
 impl Kraken {
     pub fn new(credentials: Credentials) -> Self {
@@ -151,16 +171,17 @@ impl Kraken {
         }
 
         let response = request.send().await?.json::<KrakenResponse>().await?;
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
 
-        // TODO this is wrong. test with a request which returns a definite error, like when forgetting
-        //  to specify a pair in Ticker
         match response.result.unwrap() {
             Responses::Assets(response) => Ok(response),
             _ => Err(Errors::InvalidFormat),
         }
     }
 
-    // TODO something is wrong when no params are provided
     pub async fn asset_pairs(&self, params: Option<HashMap<&str, &str>>) -> Result<AssetPairs, Errors> {
         let mut request = self.client.get(ASSET_PAIRS_URL);
 
@@ -170,11 +191,29 @@ impl Kraken {
         }
 
         let response = request.send().await?.json::<KrakenResponse>().await?;
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
 
-        // TODO this is wrong. test with a request which returns a definite error, like when forgetting
-        //  to specify a pair in Ticker
         match response.result.unwrap() {
             Responses::AssetPairs(response) => Ok(response),
+            _ => Err(Errors::InvalidFormat),
+        }
+    }
+
+    pub async fn ticker(&self, params: HashMap<&str, &str>) -> Result<HashMap<String, Ticker>, Errors> {
+        let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
+        let request = self.client.get(TICKER_URL).query(&query_params);
+
+        let response = request.send().await?.json::<KrakenResponse>().await?;
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
+
+        match response.result.unwrap() {
+            Responses::Ticker(response) => Ok(response),
             _ => Err(Errors::InvalidFormat),
         }
     }
