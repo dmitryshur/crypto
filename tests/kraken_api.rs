@@ -127,3 +127,11 @@ async fn order_book_api() {
     assert_eq!(order_book.asks.len() == 2, true);
     assert_eq!(order_book.bids.len() == 2, true);
 }
+
+async fn account_balance_api() {
+    let kraken = Kraken::new(common::create_credentials());
+    let mut params = HashMap::new();
+    params.insert("nonce", "1603293009951000");
+    let response = kraken.account_balance(Some(params)).await;
+    assert_eq!(response.is_ok(), true);
+}

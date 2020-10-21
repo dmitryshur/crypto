@@ -1,13 +1,23 @@
+use base64;
+use hmac::{Hmac, Mac, NewMac};
 use reqwest;
 use reqwest::Client;
 use serde::export::Formatter;
 use serde::Deserialize;
-use std::{collections::HashMap, error, fmt, time::Duration};
+use sha2::{Digest, Sha256, Sha512};
+use std::env;
+use std::{
+    collections::HashMap,
+    error, fmt,
+    time::{self, Duration},
+};
+use url::{form_urlencoded, Url};
 
 const ASSETS_URL: &'static str = "https://api.kraken.com/0/public/Assets";
 const ASSET_PAIRS_URL: &'static str = "https://api.kraken.com/0/public/AssetPairs";
 const TICKER_URL: &'static str = "https://api.kraken.com/0/public/Ticker";
 const ORDER_BOOK_URL: &'static str = "https://api.kraken.com/0/public/Depth";
+const ACCOUNT_BALANCE_URL: &'static str = "https://api.kraken.com/0/private/Balance";
 
 #[derive(Debug)]
 pub enum Errors {
@@ -151,6 +161,19 @@ pub struct Kraken {
     client: Client,
 }
 
+// TODO add private methods:
+//  * account balance
+//  * trade balance
+//  * open orders
+//  * closed orders
+//  * orders info
+//  * trades history
+//  * open positions
+//  * ledgers info
+//  * ledgers
+//  * trade volume
+//  * add order
+//  * cancel order
 impl Kraken {
     pub fn new(credentials: Credentials) -> Self {
         let client = Client::builder()
@@ -231,6 +254,86 @@ impl Kraken {
         match response.result.unwrap() {
             Responses::OrderBook(response) => Ok(response),
             _ => Err(Errors::InvalidFormat),
+        }
+    }
+
+    pub async fn account_balance(&self, params: Option<HashMap<&str, &str>>) -> Result<(), Errors> {
+        let nonce = time::SystemTime::now()
+            .duration_since(time::SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            .to_string();
+        let mut query_params = HashMap::new();
+        query_params.insert("nonce", nonce.as_str());
+
+        // If nonce was passed in params, we overwrite out previously created one with it
+        if let Some(params) = params {
+            for (key, value) in params {
+                query_params.insert(key, value);
+            }
+        }
+
+        let message = "c29tZSBkYXRhIHdpdGggACBhbmQg77u/";
+        // TODO create new error type for invalid base64 string
+        let secret_base64 = base64::decode(&self.credentials.secret).unwrap();
+        let url = Url::parse(ACCOUNT_BALANCE_URL).unwrap();
+        let signature = create_signature(url.path(), query_params, &secret_base64);
+        println!("sin: {}", signature);
+        todo!();
+    }
+}
+
+// Message signature using HMAC-SHA512 of (URI path + SHA256(nonce + POST data)) and base64 decoded secret API key
+fn create_signature(url: &str, params: HashMap<&str, &str>, secret: &Vec<u8>) -> String {
+    // We know it exists because we pass it in account_balance
+    let nonce = params.get("nonce").unwrap();
+    let url = Url::parse(url).unwrap();
+    let url = url.path();
+
+    let mut encoded_params = form_urlencoded::Serializer::new(String::new());
+    for (key, value) in params.iter() {
+        encoded_params.append_pair(key, value);
+    }
+    let encoded_params = encoded_params.finish();
+
+    let mut hasher = Sha256::new();
+    hasher.update(nonce.to_string() + &encoded_params);
+    let sha = hasher.finalize();
+
+    let buffer = [url.as_bytes(), sha.as_slice()].concat();
+    let mut hasher: Hmac<Sha512> = Hmac::new_varkey(secret).unwrap();
+    hasher.update(&buffer);
+
+    base64::encode(hasher.finalize().into_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_create_signature() {
+        let url = ACCOUNT_BALANCE_URL;
+        let secret = env::var("KRAKEN_SECRET_KEY").expect("KRAKEN_API_KEY not found in env");
+        let secret64 = base64::decode(secret).unwrap();
+        let timestamps = vec![
+            "1603301840074000",
+            "1603301843686000",
+            "1603301937946000",
+            "1603293009951000",
+        ];
+        let hashes = vec![
+            "cPLxlJ9pzq7xwPaERVJKFhPcf4uSjsScV7ms9TN6YS9sTmyC5BQUwaJVOMD7my3GIdstamo7G4VVOVp3si75AA==",
+            "CXIm1rRjBTEDtPPslxf/Ll6pfjI9aPNFGbA3DLWm/yqXhC5e5SjNlSFjkKNSmDkOYu5Jtm1/lBixiQ0VGgGzog==",
+            "2PLFGUf6Xyb3wC16FjpI4iTIxmmIBsf54sMg4IhDHefkHia6FH3PGtnjJEuJq5zCEH32jPuJapAyuzeRAomHvg==",
+            "fnyLS6vcz223yuXWR0rzlKteEgSCjIvkL2P8KiekpwcisBxYZKCrrovmN0AW65UwM51HQJkNydbErq1CdZ+3iw==",
+        ];
+
+        for (i, nonce) in timestamps.iter().enumerate() {
+            let params: HashMap<&str, &str> = vec![("nonce", *nonce)].into_iter().collect();
+            let expected = hashes.get(i).unwrap();
+            let signature = create_signature(url, params, &secret64);
+            assert_eq!(*expected, signature.as_str());
         }
     }
 }
