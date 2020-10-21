@@ -5,10 +5,9 @@ use reqwest::Client;
 use serde::export::Formatter;
 use serde::Deserialize;
 use sha2::{Digest, Sha256, Sha512};
-use std::env;
 use std::{
     collections::HashMap,
-    error, fmt,
+    env, error, fmt,
     time::{self, Duration},
 };
 use url::{form_urlencoded, Url};
@@ -185,15 +184,10 @@ impl Kraken {
     }
 
     // TODO refactor. send api request via a separate method
-    pub async fn assets(&self, params: Option<HashMap<&str, &str>>) -> Result<HashMap<String, Asset>, Errors> {
-        let mut request = self.client.get(ASSETS_URL);
-
-        if let Some(params) = params {
-            let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
-            request = request.query(&query_params);
-        }
-
+    pub async fn assets(&self, params: &[(&str, &str)]) -> Result<HashMap<String, Asset>, Errors> {
+        let mut request = self.client.get(ASSETS_URL).query(params);
         let response = request.send().await?.json::<KrakenResponse>().await?;
+
         if response.error.len() != 0 {
             let error = response.error.join(" ");
             return Err(Errors::Kraken(error));
@@ -205,15 +199,10 @@ impl Kraken {
         }
     }
 
-    pub async fn asset_pairs(&self, params: Option<HashMap<&str, &str>>) -> Result<AssetPairs, Errors> {
-        let mut request = self.client.get(ASSET_PAIRS_URL);
-
-        if let Some(params) = params {
-            let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
-            request = request.query(&query_params);
-        }
-
+    pub async fn asset_pairs(&self, params: &[(&str, &str)]) -> Result<AssetPairs, Errors> {
+        let request = self.client.get(ASSET_PAIRS_URL).query(params);
         let response = request.send().await?.json::<KrakenResponse>().await?;
+
         if response.error.len() != 0 {
             let error = response.error.join(" ");
             return Err(Errors::Kraken(error));
@@ -225,11 +214,10 @@ impl Kraken {
         }
     }
 
-    pub async fn ticker(&self, params: HashMap<&str, &str>) -> Result<HashMap<String, Ticker>, Errors> {
-        let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
-        let request = self.client.get(TICKER_URL).query(&query_params);
-
+    pub async fn ticker(&self, params: &[(&str, &str)]) -> Result<HashMap<String, Ticker>, Errors> {
+        let request = self.client.get(TICKER_URL).query(params);
         let response = request.send().await?.json::<KrakenResponse>().await?;
+
         if response.error.len() != 0 {
             let error = response.error.join(" ");
             return Err(Errors::Kraken(error));
@@ -241,11 +229,10 @@ impl Kraken {
         }
     }
 
-    pub async fn order_book(&self, params: HashMap<&str, &str>) -> Result<HashMap<String, OrderBook>, Errors> {
-        let query_params: Vec<(&str, &str)> = params.iter().map(|(key, value)| (*key, *value)).collect();
-        let request = self.client.get(ORDER_BOOK_URL).query(&query_params);
-
+    pub async fn order_book(&self, params: &[(&str, &str)]) -> Result<HashMap<String, OrderBook>, Errors> {
+        let request = self.client.get(ORDER_BOOK_URL).query(params);
         let response = request.send().await?.json::<KrakenResponse>().await?;
+
         if response.error.len() != 0 {
             let error = response.error.join(" ");
             return Err(Errors::Kraken(error));
@@ -257,7 +244,8 @@ impl Kraken {
         }
     }
 
-    pub async fn account_balance(&self, params: Option<HashMap<&str, &str>>) -> Result<(), Errors> {
+    // TODO finish account_balance
+    pub async fn account_balance(&self, params: &[(&str, &str)]) -> Result<(), Errors> {
         let nonce = time::SystemTime::now()
             .duration_since(time::SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -267,17 +255,14 @@ impl Kraken {
         query_params.insert("nonce", nonce.as_str());
 
         // If nonce was passed in params, we overwrite out previously created one with it
-        if let Some(params) = params {
-            for (key, value) in params {
-                query_params.insert(key, value);
-            }
+        for (key, value) in params {
+            query_params.insert(*key, *value);
         }
 
-        let message = "c29tZSBkYXRhIHdpdGggACBhbmQg77u/";
         // TODO create new error type for invalid base64 string
-        let secret_base64 = base64::decode(&self.credentials.secret).unwrap();
+        let secret64 = base64::decode(&self.credentials.secret).unwrap();
         let url = Url::parse(ACCOUNT_BALANCE_URL).unwrap();
-        let signature = create_signature(url.path(), query_params, &secret_base64);
+        let signature = create_signature(url.path(), query_params, &secret64);
         println!("sin: {}", signature);
         todo!();
     }

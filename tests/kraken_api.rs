@@ -11,15 +11,12 @@ async fn assets_api() {
     let kraken = Kraken::new(common::create_credentials());
 
     // Should return all the assets
-    let response = kraken.assets(None).await;
+    let response = kraken.assets(&[]).await;
     assert_eq!(response.is_ok(), true);
     assert_eq!(response.unwrap().len() > 0, true,);
 
-    let mut params = HashMap::new();
-    params.insert("asset", "algo,ada");
-
     // Should return only the requested ALGO and ADA assets
-    let response = kraken.assets(Some(params)).await;
+    let response = kraken.assets(&[("asset", "algo,ada")]).await;
 
     assert_eq!(response.is_ok(), true);
     let response = response.unwrap();
@@ -33,7 +30,7 @@ async fn assets_api() {
 async fn asset_pairs_api() {
     let kraken = Kraken::new(common::create_credentials());
 
-    let response = kraken.asset_pairs(None).await;
+    let response = kraken.asset_pairs(&[]).await;
     assert_eq!(response.is_ok(), true);
 
     match response.unwrap() {
@@ -45,11 +42,7 @@ async fn asset_pairs_api() {
         }
     }
 
-    let mut params = HashMap::new();
-    params.insert("pair", "XXRPZUSD");
-    params.insert("info", "fees");
-
-    let response = kraken.asset_pairs(Some(params)).await;
+    let response = kraken.asset_pairs(&[("pair", "XXRPZUSD"), ("info", "fees")]).await;
     assert_eq!(response.is_ok(), true);
 
     match response.unwrap() {
@@ -61,11 +54,9 @@ async fn asset_pairs_api() {
         }
     }
 
-    let mut params = HashMap::new();
-    params.insert("pair", "XXRPZUSD,XETHXXBT.d");
-    params.insert("info", "margin");
-
-    let response = kraken.asset_pairs(Some(params)).await;
+    let response = kraken
+        .asset_pairs(&[("pair", "XXRPZUSD,XETHXXBT.d"), ("info", "margin")])
+        .await;
     assert_eq!(response.is_ok(), true);
 
     match response.unwrap() {
@@ -77,13 +68,12 @@ async fn asset_pairs_api() {
         }
     }
 }
+
 #[tokio::test]
 async fn ticker_api() {
     let kraken = Kraken::new(common::create_credentials());
-    let mut params = HashMap::new();
-    params.insert("pair", "XXRPZUSD,ADAETH");
 
-    let response = kraken.ticker(params).await;
+    let response = kraken.ticker(&[("pair", "XXRPZUSD,ADAETH")]).await;
     assert_eq!(response.is_ok(), true);
 
     let response = response.unwrap();
@@ -96,10 +86,8 @@ async fn ticker_api() {
 #[tokio::test]
 async fn order_book_api() {
     let kraken = Kraken::new(common::create_credentials());
-    let mut params = HashMap::new();
-    params.insert("pair", "XXRPZUSD");
 
-    let response = kraken.order_book(params).await;
+    let response = kraken.order_book(&[("pair", "XXRPZUSD")]).await;
     assert_eq!(response.is_ok(), true);
 
     let response = response.unwrap();
@@ -111,11 +99,7 @@ async fn order_book_api() {
     assert_eq!(order_book.asks.len() > 0, true);
     assert_eq!(order_book.bids.len() > 0, true);
 
-    let mut params = HashMap::new();
-    params.insert("pair", "XXRPZUSD");
-    params.insert("count", "2");
-
-    let response = kraken.order_book(params).await;
+    let response = kraken.order_book(&[("pair", "XXRPZUSD"), ("count", "2")]).await;
     assert_eq!(response.is_ok(), true);
 
     let response = response.unwrap();
@@ -130,8 +114,6 @@ async fn order_book_api() {
 
 async fn account_balance_api() {
     let kraken = Kraken::new(common::create_credentials());
-    let mut params = HashMap::new();
-    params.insert("nonce", "1603293009951000");
-    let response = kraken.account_balance(Some(params)).await;
+    let response = kraken.account_balance(&[("nonce", "1603293009951000")]).await;
     assert_eq!(response.is_ok(), true);
 }
