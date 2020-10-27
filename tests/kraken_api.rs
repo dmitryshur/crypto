@@ -112,8 +112,13 @@ async fn order_book_api() {
     assert_eq!(order_book.bids.len() == 2, true);
 }
 
+#[tokio::test]
 async fn account_balance_api() {
     let kraken = Kraken::new(common::create_credentials());
-    let response = kraken.account_balance(&[("nonce", "1603293009951000")]).await;
+    let response = kraken.account_balance(&[]).await;
+
     assert_eq!(response.is_ok(), true);
+
+    let response = response.unwrap();
+    assert_eq!(response.contains_key("ZUSD"), true);
 }
