@@ -19,6 +19,7 @@ const ASSET_PAIRS_URL: &'static str = "https://api.kraken.com/0/public/AssetPair
 const TICKER_URL: &'static str = "https://api.kraken.com/0/public/Ticker";
 const ORDER_BOOK_URL: &'static str = "https://api.kraken.com/0/public/Depth";
 const ACCOUNT_BALANCE_URL: &'static str = "https://api.kraken.com/0/private/Balance";
+const TRADE_BALANCE_URL: &'static str = "https://api.kraken.com/0/private/TradeBalance";
 
 #[derive(Debug)]
 pub enum Errors {
@@ -92,6 +93,7 @@ enum Responses {
     AssetPairs(AssetPairs),
     Ticker(HashMap<String, Ticker>),
     OrderBook(HashMap<String, OrderBook>),
+    TradeBalance(TradeBalance),
     Balance(HashMap<String, String>),
 }
 
@@ -173,13 +175,35 @@ pub struct OrderBook {
     pub bids: Vec<(String, String, u64)>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct TradeBalance {
+    // Equivalent balance (combined balance of all currencies)
+    pub eb: String,
+    // Trade balance (combined balance of all equity currencies)
+    pub tb: String,
+    // Margin amount of open positions
+    pub m: String,
+    // Unrealized net profit/loss of open positions
+    pub n: String,
+    // Cost basis of open positions
+    pub c: String,
+    // Current floating valuation of open positions
+    pub v: String,
+    // Equity = trade balance + unrealized net profit/loss
+    pub e: String,
+    // Free margin = equity - initial margin (maximum margin available to open new positions)
+    pub mf: String,
+    // Margin level = (equity / initial margin) * 100
+    pub ml: Option<String>,
+}
+
 pub struct Kraken {
     credentials: Credentials,
     client: Client,
 }
 
 // TODO add private methods:
-//  * trade balance
+//  Convert strings to floats where possible
 //  * open orders
 //  * closed orders
 //  * orders info
@@ -190,6 +214,7 @@ pub struct Kraken {
 //  * trade volume
 //  * add order
 //  * cancel order
+//  Maybe change the naming of the params returned from kraken
 impl Kraken {
     pub fn new(credentials: Credentials) -> Self {
         let client = Client::builder()
@@ -260,11 +285,8 @@ impl Kraken {
         }
     }
 
-    // TODO move the auth logic to create_signature. create private/public api methods. in the private
-    //  method, add the post data/headers logic. in the public method, add the existing boilerplate code
-    //  from all the methods above
     pub async fn account_balance(&self, params: &[(&str, &str)]) -> Result<HashMap<String, String>, Errors> {
-        let request = self.private_request(params)?;
+        let request = self.private_request(ACCOUNT_BALANCE_URL, params)?;
         let response = request.send().await?.json::<KrakenResponse>().await?;
 
         if response.error.len() != 0 {
@@ -278,7 +300,22 @@ impl Kraken {
         }
     }
 
-    pub fn private_request(&self, params: &[(&str, &str)]) -> Result<RequestBuilder, Errors> {
+    pub async fn trade_balance(&self, params: &[(&str, &str)]) -> Result<TradeBalance, Errors> {
+        let request = self.private_request(TRADE_BALANCE_URL, params)?;
+        let response = request.send().await?.json::<KrakenResponse>().await?;
+
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
+
+        match response.result.unwrap() {
+            Responses::TradeBalance(response) => Ok(response),
+            _ => Err(Errors::InvalidFormat),
+        }
+    }
+
+    fn private_request(&self, url: &str, params: &[(&str, &str)]) -> Result<RequestBuilder, Errors> {
         let nonce = time::SystemTime::now()
             .duration_since(time::SystemTime::UNIX_EPOCH)
             .unwrap()
@@ -293,14 +330,14 @@ impl Kraken {
             query_params.insert(key, *value);
         }
 
-        let signature = create_signature(ACCOUNT_BALANCE_URL, query_params, &self.credentials.secret)?;
+        let signature = create_signature(url, query_params, &self.credentials.secret)?;
 
         let mut headers = HeaderMap::new();
         headers.insert("API-Key", HeaderValue::from_str(&self.credentials.api_key).unwrap());
         headers.insert("API-Sign", HeaderValue::from_str(&signature).unwrap());
         let post_data = PrivatePostData { nonce, otp: None };
 
-        Ok(self.client.post(ACCOUNT_BALANCE_URL).headers(headers).form(&post_data))
+        Ok(self.client.post(url).headers(headers).form(&post_data))
     }
 }
 
@@ -315,7 +352,9 @@ fn create_signature(url: &str, params: HashMap<&str, &str>, secret: &str) -> Res
 
     let mut encoded_params = form_urlencoded::Serializer::new(String::new());
     for (key, value) in params.iter() {
-        encoded_params.append_pair(key, value);
+        if *key == "nonce" || *key == "otp" {
+            encoded_params.append_pair(key, value);
+        }
     }
     let encoded_params = encoded_params.finish();
 

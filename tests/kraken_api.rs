@@ -91,7 +91,6 @@ async fn order_book_api() {
     assert_eq!(response.is_ok(), true);
 
     let response = response.unwrap();
-
     assert_eq!(response.len() == 1, true);
     assert_eq!(response.contains_key("XXRPZUSD"), true);
 
@@ -103,7 +102,6 @@ async fn order_book_api() {
     assert_eq!(response.is_ok(), true);
 
     let response = response.unwrap();
-
     assert_eq!(response.len() == 1, true);
     assert_eq!(response.contains_key("XXRPZUSD"), true);
 
@@ -116,9 +114,38 @@ async fn order_book_api() {
 async fn account_balance_api() {
     let kraken = Kraken::new(common::create_credentials());
     let response = kraken.account_balance(&[]).await;
-
     assert_eq!(response.is_ok(), true);
 
     let response = response.unwrap();
     assert_eq!(response.contains_key("ZUSD"), true);
+}
+
+#[tokio::test]
+async fn trade_balance_api() {
+    let kraken = Kraken::new(common::create_credentials());
+    let response = kraken.trade_balance(&[]).await;
+    assert_eq!(response.is_ok(), true);
+
+    let response = response.unwrap();
+    assert_eq!(response.eb.len() > 0, true);
+    assert_eq!(response.tb.len() > 0, true);
+    assert_eq!(response.m.len() > 0, true);
+    assert_eq!(response.n.len() > 0, true);
+    assert_eq!(response.c.len() > 0, true);
+    assert_eq!(response.v.len() > 0, true);
+    assert_eq!(response.e.len() > 0, true);
+    assert_eq!(response.mf.len() > 0, true);
+
+    let response = kraken.trade_balance(&[("asset", "ZUSD")]).await;
+    assert_eq!(response.is_ok(), true);
+
+    let response = response.unwrap();
+    assert_eq!(response.eb.len() > 0, true);
+    assert_eq!(response.tb.len() > 0, true);
+    assert_eq!(response.m.len() > 0, true);
+    assert_eq!(response.n.len() > 0, true);
+    assert_eq!(response.c.len() > 0, true);
+    assert_eq!(response.v.len() > 0, true);
+    assert_eq!(response.e.len() > 0, true);
+    assert_eq!(response.mf.len() > 0, true);
 }
