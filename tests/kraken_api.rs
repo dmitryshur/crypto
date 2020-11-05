@@ -6,9 +6,11 @@ use tokio;
 
 mod common;
 
+use common::{create_credentials, create_urls};
+
 #[tokio::test]
 async fn assets_api() {
-    let kraken = Kraken::new(common::create_credentials());
+    let kraken = Kraken::new(create_credentials(), create_urls());
 
     // Should return all the assets
     let response = kraken.assets(&[]).await;
@@ -21,14 +23,14 @@ async fn assets_api() {
     assert_eq!(response.is_ok(), true);
     let response = response.unwrap();
 
-    assert_eq!(response.len(), 2,);
-    assert_eq!(response.contains_key("ALGO"), true,);
-    assert_eq!(response.contains_key("ADA"), true,);
+    assert_eq!(response.len(), 2);
+    assert_eq!(response.contains_key("ALGO"), true);
+    assert_eq!(response.contains_key("ADA"), true);
 }
 
 #[tokio::test]
 async fn asset_pairs_api() {
-    let kraken = Kraken::new(common::create_credentials());
+    let kraken = Kraken::new(create_credentials(), create_urls());
 
     let response = kraken.asset_pairs(&[]).await;
     assert_eq!(response.is_ok(), true);
@@ -71,7 +73,7 @@ async fn asset_pairs_api() {
 
 #[tokio::test]
 async fn ticker_api() {
-    let kraken = Kraken::new(common::create_credentials());
+    let kraken = Kraken::new(create_credentials(), create_urls());
 
     let response = kraken.ticker(&[("pair", "XXRPZUSD,ADAETH")]).await;
     assert_eq!(response.is_ok(), true);
@@ -85,7 +87,7 @@ async fn ticker_api() {
 
 #[tokio::test]
 async fn order_book_api() {
-    let kraken = Kraken::new(common::create_credentials());
+    let kraken = Kraken::new(create_credentials(), create_urls());
 
     let response = kraken.order_book(&[("pair", "XXRPZUSD")]).await;
     assert_eq!(response.is_ok(), true);
@@ -112,7 +114,7 @@ async fn order_book_api() {
 
 #[tokio::test]
 async fn account_balance_api() {
-    let kraken = Kraken::new(common::create_credentials());
+    let kraken = Kraken::new(create_credentials(), create_urls());
     let response = kraken.account_balance(&[]).await;
     assert_eq!(response.is_ok(), true);
 
@@ -122,7 +124,7 @@ async fn account_balance_api() {
 
 #[tokio::test]
 async fn trade_balance_api() {
-    let kraken = Kraken::new(common::create_credentials());
+    let kraken = Kraken::new(create_credentials(), create_urls());
     let response = kraken.trade_balance(&[]).await;
     assert_eq!(response.is_ok(), true);
 

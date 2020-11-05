@@ -1,0 +1,12 @@
+version: "3.7"
+
+services:
+  proxy_server:
+    build:
+      context: ./proxy
+    environment:
+      PROXY_PORT: 4000
+    volumes:
+      - ./proxy/src:/app/src
+    ports:
+      - 4000:4000
