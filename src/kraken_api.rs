@@ -31,7 +31,7 @@ impl Urls {
             ticker: format!("{}{}", domain, "/0/public/Ticker"),
             order_book: format!("{}{}", domain, "/0/public/Depth"),
             account_balance: format!("{}{}", domain, "/0/private/Balance"),
-            trade_balance: format!("{}{}", domain, "/0/private/TraceBalance"),
+            trade_balance: format!("{}{}", domain, "/0/private/TradeBalance"),
         }
     }
 }
@@ -219,7 +219,6 @@ pub struct Kraken {
 }
 
 // TODO add private methods:
-//  fix tests for account_balance/trace_balance
 //  Convert strings to floats where possible
 //  * open orders
 //  * closed orders
@@ -235,7 +234,7 @@ pub struct Kraken {
 impl Kraken {
     pub fn new(credentials: Credentials, urls: Urls) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
             .build()
             .expect("Can't create reqwest client");
 
@@ -393,13 +392,11 @@ fn create_signature(url: &str, params: HashMap<&str, &str>, secret: &str) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
-    // FIXME this will break each time the API key/secret is changed
-    // #[test]
+    #[test]
     fn test_create_signature() {
         let url = "https://api.kraken.com/0/private/Balance";
-        let secret = env::var("KRAKEN_SECRET_KEY").expect("KRAKEN_API_KEY not found in env");
+        let secret = "NZTRqjFqtb7Jbg5Yx7iRelcfCxiB7pL1FvvK3tokScThZDl0z7oi/m5aHhtKcUp2dIpT8qIbaMfp01Glzw24Ag==";
         let timestamps = vec![
             "1603733933254000",
             "1603733979214000",
@@ -418,7 +415,7 @@ mod tests {
         for (i, nonce) in timestamps.iter().enumerate() {
             let params: HashMap<&str, &str> = vec![("nonce", *nonce)].into_iter().collect();
             let expected = hashes.get(i).unwrap();
-            let signature = create_signature(url, params, secret.as_str());
+            let signature = create_signature(url, params, secret);
             assert_eq!(signature.is_ok(), true);
             assert_eq!(*expected, signature.unwrap().as_str());
         }

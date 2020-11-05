@@ -2,7 +2,7 @@ import type { Request, Response, Express, RequestHandler, NextFunction } from 'e
 const express = require('express');
 const proxy = require('express-http-proxy');
 
-const CACHE_CLEAR_TIMEOUT = 30000;
+const CACHE_CLEAR_TIMEOUT = 60000;
 
 interface ProxyCache {
   [key: string]: any;
