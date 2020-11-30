@@ -127,26 +127,6 @@ async fn trade_balance_api() {
     let response = kraken.trade_balance(&[]).await;
     assert_eq!(response.is_ok(), true, "Response: {:?}", response);
 
-    let response = response.unwrap();
-    assert_eq!(response.eb.len() > 0, true);
-    assert_eq!(response.tb.len() > 0, true);
-    assert_eq!(response.m.len() > 0, true);
-    assert_eq!(response.n.len() > 0, true);
-    assert_eq!(response.c.len() > 0, true);
-    assert_eq!(response.v.len() > 0, true);
-    assert_eq!(response.e.len() > 0, true);
-    assert_eq!(response.mf.len() > 0, true);
-
     let response = kraken.trade_balance(&[("asset", "ZUSD")]).await;
     assert_eq!(response.is_ok(), true, "Response: {:?}", response);
-
-    let response = response.unwrap();
-    assert_eq!(response.eb.len() > 0, true);
-    assert_eq!(response.tb.len() > 0, true);
-    assert_eq!(response.m.len() > 0, true);
-    assert_eq!(response.n.len() > 0, true);
-    assert_eq!(response.c.len() > 0, true);
-    assert_eq!(response.v.len() > 0, true);
-    assert_eq!(response.e.len() > 0, true);
-    assert_eq!(response.mf.len() > 0, true);
 }

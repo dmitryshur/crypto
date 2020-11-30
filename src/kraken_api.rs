@@ -5,11 +5,15 @@ use reqwest::{
     header::{HeaderMap, HeaderValue},
     Client, RequestBuilder,
 };
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{Deserializer, Error},
+    Deserialize, Serialize,
+};
 use sha2::{Digest, Sha256, Sha512};
 use std::{
     collections::HashMap,
     error, fmt,
+    str::FromStr,
     time::{self, Duration},
 };
 use url::{form_urlencoded, Url};
@@ -89,6 +93,58 @@ impl Credentials {
     }
 }
 
+fn from_f64_str<'de, D>(deserializer: D) -> Result<f64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: &str = Deserialize::deserialize(deserializer)?;
+
+    f64::from_str(s).map_err(D::Error::custom)
+}
+
+fn from_f64_option_str<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Option<&str> = Deserialize::deserialize(deserializer)?;
+
+    return match s {
+        Some(s) => {
+            println!("s: {:?}", s);
+            let num: f64 = s.parse().unwrap();
+            println!("num: {:?}", num);
+            Ok(Some(num))
+        }
+        None => {
+            println!("none");
+            Ok(None)
+        },
+    }
+}
+
+fn from_f64_str_vec<'de, D>(deserializer: D) -> Result<Vec<f64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Vec<String> = Deserialize::deserialize(deserializer)?;
+    let floats_vec: Vec<f64> = s.iter().map(|num| num.parse().unwrap()).collect();
+
+    Ok(floats_vec)
+}
+
+fn from_tuple<'de, D>(deserializer: D) -> Result<Vec<(f64, f64, u64)>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let s: Vec<(String, String, u64)> = Deserialize::deserialize(deserializer)?;
+    let floats_vec: Vec<(f64, f64, u64)> = s
+        .iter()
+        .map(|tuple| (tuple.0.parse().unwrap(), tuple.1.parse().unwrap(), tuple.2))
+        .collect();
+
+    Ok(floats_vec)
+}
+
 #[derive(Debug, Serialize)]
 struct PrivatePostData {
     nonce: String,
@@ -147,7 +203,9 @@ pub struct AssetPairInfo {
     fee_volume_currency: String,
     margin_call: u64,
     margin_stop: u64,
-    ordermin: Option<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "from_f64_option_str")]
+    ordermin: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -165,51 +223,71 @@ pub struct AssetPairMargin {
 #[derive(Debug, Deserialize)]
 pub struct Ticker {
     // Ask array (<price>, <whole lot volume>, <lot volume>)
-    a: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    a: Vec<f64>,
     // Bid array (<price>, <whole lot volume>, <lot volume>)
-    b: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    b: Vec<f64>,
     // Last trade closed array (<price>, <lot volume>)
-    c: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    c: Vec<f64>,
     // Volume array (<today>, <last 24 hours>)
-    v: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    v: Vec<f64>,
     // Volume weighted average price array (<today>, <last 24 hours>)
-    p: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    p: Vec<f64>,
     // Number of trades array (<today>, <last 24 hours>)
     t: Vec<u64>,
     // Low array(<today>, <last 24 hours>)
-    l: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    l: Vec<f64>,
     // High array(<today>, <last 24 hours>)
-    h: Vec<String>,
+    #[serde(deserialize_with = "from_f64_str_vec")]
+    h: Vec<f64>,
     // Today's opening price
-    o: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    o: f64,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct OrderBook {
-    pub asks: Vec<(String, String, u64)>,
-    pub bids: Vec<(String, String, u64)>,
+    #[serde(deserialize_with = "from_tuple")]
+    pub asks: Vec<(f64, f64, u64)>,
+    #[serde(deserialize_with = "from_tuple")]
+    pub bids: Vec<(f64, f64, u64)>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct TradeBalance {
     // Equivalent balance (combined balance of all currencies)
-    pub eb: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub eb: f64,
     // Trade balance (combined balance of all equity currencies)
-    pub tb: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub tb: f64,
     // Margin amount of open positions
-    pub m: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub m: f64,
     // Unrealized net profit/loss of open positions
-    pub n: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub n: f64,
     // Cost basis of open positions
-    pub c: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub c: f64,
     // Current floating valuation of open positions
-    pub v: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub v: f64,
     // Equity = trade balance + unrealized net profit/loss
-    pub e: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub e: f64,
     // Free margin = equity - initial margin (maximum margin available to open new positions)
-    pub mf: String,
+    #[serde(deserialize_with = "from_f64_str")]
+    pub mf: f64,
     // Margin level = (equity / initial margin) * 100
-    pub ml: Option<String>,
+    #[serde(default)]
+    #[serde(deserialize_with = "from_f64_option_str")]
+    pub ml: Option<f64>,
 }
 
 pub struct Kraken {
@@ -219,7 +297,6 @@ pub struct Kraken {
 }
 
 // TODO add private methods:
-//  Convert strings to floats where possible
 //  * open orders
 //  * closed orders
 //  * orders info
@@ -335,6 +412,7 @@ impl Kraken {
         }
     }
 
+    // TODO replace url type with IntoUrl
     fn private_request(&self, url: &str, params: &[(&str, &str)]) -> Result<RequestBuilder, Errors> {
         let nonce = time::SystemTime::now()
             .duration_since(time::SystemTime::UNIX_EPOCH)
