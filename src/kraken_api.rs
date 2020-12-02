@@ -9,6 +9,7 @@ use serde::{
     de::{Deserializer, Error},
     Deserialize, Serialize,
 };
+use serde_json::Value;
 use sha2::{Digest, Sha256, Sha512};
 use std::{
     collections::HashMap,
@@ -25,6 +26,7 @@ pub struct Urls {
     order_book: String,
     account_balance: String,
     trade_balance: String,
+    open_orders: String,
 }
 
 impl Urls {
@@ -36,6 +38,7 @@ impl Urls {
             order_book: format!("{}{}", domain, "/0/public/Depth"),
             account_balance: format!("{}{}", domain, "/0/private/Balance"),
             trade_balance: format!("{}{}", domain, "/0/private/TradeBalance"),
+            open_orders: format!("{}{}", domain, "/0/private/OpenOrders"),
         }
     }
 }
@@ -118,8 +121,8 @@ where
         None => {
             println!("none");
             Ok(None)
-        },
-    }
+        }
+    };
 }
 
 fn from_f64_str_vec<'de, D>(deserializer: D) -> Result<Vec<f64>, D::Error>
@@ -165,7 +168,9 @@ enum Responses {
     Ticker(HashMap<String, Ticker>),
     OrderBook(HashMap<String, OrderBook>),
     TradeBalance(TradeBalance),
+    // TODO convert to float
     Balance(HashMap<String, String>),
+    OpenOrder { open: HashMap<String, OpenOrder> },
 }
 
 #[derive(Debug, Deserialize)]
@@ -290,6 +295,98 @@ pub struct TradeBalance {
     pub ml: Option<f64>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct OpenOrder {
+    // Referral order transaction id that created this order
+    refid: Option<String>,
+    // User reference id
+    userref: u64,
+    // Status of order:
+    //     pending = order pending book entry
+    //     open = open order
+    //     closed = closed order
+    //     canceled = order canceled
+    //     expired = order expired
+    status: String,
+    // Unix timestamp of when order was placed
+    opentm: f64,
+    // Unix timestamp of order start time (or 0 if not set)
+    starttm: f64,
+    // Unix timestamp of order end time (or 0 if not set)
+    expiretm: f64,
+    descr: OpenOrderDescription,
+    // Volume of order (base currency unless viqc set in oflags)
+    #[serde(deserialize_with = "from_f64_str")]
+    vol: f64,
+    // Volume executed (base currency unless viqc set in oflags)
+    #[serde(deserialize_with = "from_f64_str")]
+    vol_exec: f64,
+    // Total cost (quote currency unless unless viqc set in oflags)
+    #[serde(deserialize_with = "from_f64_str")]
+    cost: f64,
+    // Total fee (quote currency)
+    #[serde(deserialize_with = "from_f64_str")]
+    fee: f64,
+    // Average price (quote currency unless viqc set in oflags)
+    #[serde(deserialize_with = "from_f64_str")]
+    price: f64,
+    // Stop price (quote currency, for trailing stops)
+    #[serde(deserialize_with = "from_f64_str")]
+    stopprice: f64,
+    // Triggered limit price (quote currency, when limit based order type triggered)
+    #[serde(deserialize_with = "from_f64_str")]
+    limitprice: f64,
+    // Comma delimited list of miscellaneous info
+    //     stopped = triggered by stop price
+    //     touched = triggered by touch price
+    //     liquidated = liquidation
+    //     partial = partial fill
+    misc: String,
+    // Comma delimited list of order flags
+    //     viqc = volume in quote currency
+    //     fcib = prefer fee in base currency (default if selling)
+    //     fciq = prefer fee in quote currency (default if buying)
+    //     nompp = no market price protection
+    oflags: String,
+    // Array of trade ids related to order (if trades info requested and data available)
+    trades: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct OpenOrderDescription {
+    // Asset pair
+    pair: String,
+    // Type of order
+    #[serde(rename = "type")]
+    kind: String,
+    // Order type:
+    //     market
+    //     limit (price = limit price)
+    //     stop-loss (price = stop loss price)
+    //     take-profit (price = take profit price)
+    //     stop-loss-profit (price = stop loss price, price2 = take profit price)
+    //     stop-loss-profit-limit (price = stop loss price, price2 = take profit price)
+    //     stop-loss-limit (price = stop loss trigger price, price2 = triggered limit price)
+    //     take-profit-limit (price = take profit trigger price, price2 = triggered limit price)
+    //     trailing-stop (price = trailing stop offset)
+    //     trailing-stop-limit (price = trailing stop offset, price2 = triggered limit offset)
+    //     stop-loss-and-limit (price = stop loss price, price2 = limit price)
+    //     settle-position
+    ordertype: String,
+    // Primary price
+    #[serde(deserialize_with = "from_f64_str")]
+    price: f64,
+    // Secondary price
+    #[serde(deserialize_with = "from_f64_str")]
+    price2: f64,
+    // This could be a number if enabled in the account
+    leverage: String,
+    // Order description
+    order: String,
+    // Conditional close order description (if conditional close set)
+    close: String,
+}
+
 pub struct Kraken {
     credentials: Credentials,
     client: Client,
@@ -408,6 +505,21 @@ impl Kraken {
 
         match response.result.unwrap() {
             Responses::TradeBalance(response) => Ok(response),
+            _ => Err(Errors::InvalidFormat),
+        }
+    }
+
+    pub async fn open_orders(&self, params: &[(&str, &str)]) -> Result<HashMap<String, OpenOrder>, Errors> {
+        let request = self.private_request(&self.urls.open_orders, params)?;
+        let response = request.send().await?.json::<KrakenResponse>().await?;
+
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
+
+        match response.result.unwrap() {
+            Responses::OpenOrder { open } => Ok(open),
             _ => Err(Errors::InvalidFormat),
         }
     }

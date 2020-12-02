@@ -130,3 +130,14 @@ async fn trade_balance_api() {
     let response = kraken.trade_balance(&[("asset", "ZUSD")]).await;
     assert_eq!(response.is_ok(), true, "Response: {:?}", response);
 }
+
+// TODO: this test is missing a request with the userref params (no idea what it does)
+#[tokio::test]
+async fn open_orders_api() {
+    let kraken = Kraken::new(create_credentials(), create_urls());
+    let response = kraken.open_orders(&[]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.open_orders(&[("trades", "true")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+}
