@@ -131,7 +131,6 @@ async fn trade_balance_api() {
     assert_eq!(response.is_ok(), true, "Response: {:?}", response);
 }
 
-// TODO: this test is missing a request with the userref params (no idea what it does)
 #[tokio::test]
 async fn open_orders_api() {
     let kraken = Kraken::new(create_credentials(), create_urls());
@@ -139,5 +138,33 @@ async fn open_orders_api() {
     assert_eq!(response.is_ok(), true, "Response: {:?}", response);
 
     let response = kraken.open_orders(&[("trades", "true")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.open_orders(&[("userref", "0")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+}
+
+#[tokio::test]
+async fn closed_orders_api() {
+    let kraken = Kraken::new(create_credentials(), create_urls());
+    let response = kraken.closed_orders(&[]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.closed_orders(&[("trades", "true")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.closed_orders(&[("userref", "0")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.closed_orders(&[("start", "0")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.closed_orders(&[("end", "0")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.closed_orders(&[("ofs", "1")]).await;
+    assert_eq!(response.is_ok(), true, "Response: {:?}", response);
+
+    let response = kraken.closed_orders(&[("closetime", "close")]).await;
     assert_eq!(response.is_ok(), true, "Response: {:?}", response);
 }

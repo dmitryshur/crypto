@@ -1,3 +1,4 @@
+// https://www.kraken.com/features/api
 use base64;
 use hmac::{Hmac, Mac, NewMac};
 use reqwest::{
@@ -9,7 +10,6 @@ use serde::{
     de::{Deserializer, Error},
     Deserialize, Serialize,
 };
-use serde_json::Value;
 use sha2::{Digest, Sha256, Sha512};
 use std::{
     collections::HashMap,
@@ -27,6 +27,7 @@ pub struct Urls {
     account_balance: String,
     trade_balance: String,
     open_orders: String,
+    closed_orders: String,
 }
 
 impl Urls {
@@ -39,6 +40,7 @@ impl Urls {
             account_balance: format!("{}{}", domain, "/0/private/Balance"),
             trade_balance: format!("{}{}", domain, "/0/private/TradeBalance"),
             open_orders: format!("{}{}", domain, "/0/private/OpenOrders"),
+            closed_orders: format!("{}{}", domain, "/0/private/ClosedOrders"),
         }
     }
 }
@@ -170,7 +172,9 @@ enum Responses {
     TradeBalance(TradeBalance),
     // TODO convert to float
     Balance(HashMap<String, String>),
-    OpenOrder { open: HashMap<String, OpenOrder> },
+    OpenOrders { open: HashMap<String, Order> },
+    // This is missing the closed orders count. not sure if neccessery
+    ClosedOrders { closed: HashMap<String, Order> },
 }
 
 #[derive(Debug, Deserialize)]
@@ -296,11 +300,11 @@ pub struct TradeBalance {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct OpenOrder {
+pub struct Order {
     // Referral order transaction id that created this order
     refid: Option<String>,
     // User reference id
-    userref: u64,
+    userref: Option<u64>,
     // Status of order:
     //     pending = order pending book entry
     //     open = open order
@@ -314,6 +318,10 @@ pub struct OpenOrder {
     starttm: f64,
     // Unix timestamp of order end time (or 0 if not set)
     expiretm: f64,
+    // Unix timestamp of when order was closed (available in closed order)
+    closetm: Option<f64>,
+    // Amount of available order info matching criteria (available in closed order)
+    reason: Option<String>,
     descr: OpenOrderDescription,
     // Volume of order (base currency unless viqc set in oflags)
     #[serde(deserialize_with = "from_f64_str")]
@@ -350,6 +358,8 @@ pub struct OpenOrder {
     oflags: String,
     // Array of trade ids related to order (if trades info requested and data available)
     trades: Option<Vec<String>>,
+    // The amount of closed orders
+    count: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -394,13 +404,12 @@ pub struct Kraken {
 }
 
 // TODO add private methods:
-//  * open orders
-//  * closed orders
-//  * orders info
+//  * query orders info
 //  * trades history
+//  * query trades info
 //  * open positions
 //  * ledgers info
-//  * ledgers
+//  * query ledgers
 //  * trade volume
 //  * add order
 //  * cancel order
@@ -509,7 +518,7 @@ impl Kraken {
         }
     }
 
-    pub async fn open_orders(&self, params: &[(&str, &str)]) -> Result<HashMap<String, OpenOrder>, Errors> {
+    pub async fn open_orders(&self, params: &[(&str, &str)]) -> Result<HashMap<String, Order>, Errors> {
         let request = self.private_request(&self.urls.open_orders, params)?;
         let response = request.send().await?.json::<KrakenResponse>().await?;
 
@@ -519,7 +528,22 @@ impl Kraken {
         }
 
         match response.result.unwrap() {
-            Responses::OpenOrder { open } => Ok(open),
+            Responses::OpenOrders { open } => Ok(open),
+            _ => Err(Errors::InvalidFormat),
+        }
+    }
+
+    pub async fn closed_orders(&self, params: &[(&str, &str)]) -> Result<HashMap<String, Order>, Errors> {
+        let request = self.private_request(&self.urls.closed_orders, params)?;
+        let response = request.send().await?.json::<KrakenResponse>().await?;
+
+        if response.error.len() != 0 {
+            let error = response.error.join(" ");
+            return Err(Errors::Kraken(error));
+        }
+
+        match response.result.unwrap() {
+            Responses::ClosedOrders { closed } => Ok(closed),
             _ => Err(Errors::InvalidFormat),
         }
     }
